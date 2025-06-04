@@ -23,4 +23,5 @@ all:
       ansible_host: $EC2_IP
       ansible_user: $SSH_USER
       ansible_ssh_private_key_file: $PEM_PATH
+      ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
 EOF
