@@ -24,6 +24,7 @@ pipeline {
     stage('Generate Inventory') {
       steps {
         dir('ansible') {
+          sh 'chmod +x inventory_create.sh'
           sh './inventory_create.sh'
         }
       }
