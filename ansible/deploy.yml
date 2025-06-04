@@ -10,7 +10,7 @@
     deploy_user: "rpx"
     deploy_branch: "RB_2025_05_02_RC"
     deploy_username: "rpx"
-    app_path: "/home/rpx/app"  # ⬅️ Replace with actual app path
+    app_path: "/home/rpx/app" 
 
   tasks:
 
