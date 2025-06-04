@@ -1,6 +1,6 @@
 aws_region        = "us-east-1"
 availability_zone = "us-east-1d"
-ami_id            = "ami-07b7f66b629de9364"
+ami_id            = "ami-084568db4383264d4"
 instance_type     = "t2.large"
 subnet_id         = "subnet-0d2642da77bbfe744"
 security_group_id = "sg-0a18f708db91ef96f"
