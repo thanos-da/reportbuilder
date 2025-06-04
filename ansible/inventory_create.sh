@@ -1,22 +1,21 @@
 #!/bin/bash
 
-# Fail fast on errors
 set -e
 
-# Get the EC2 public IP from Terraform
+# Get IP from Terraform output
 EC2_IP=$(terraform -chdir=../terraform output -raw ec2_public_ip)
 
-# Check if the IP was retrieved
+# Validate
 if [[ -z "$EC2_IP" ]]; then
-  echo "❌ ERROR: ec2_public_ip not available from Terraform."
+  echo "❌ ERROR: Could not get ec2_public_ip from Terraform."
   exit 1
 fi
 
-# Use env vars from Jenkins
+# These env vars are passed from Jenkins
 SSH_USER="${SSH_USER:-ubuntu}"
 PEM_PATH="${PEM_KEY}"
 
-# Generate the inventory directly
+# Write inventory.yml directly
 cat <<EOF > inventory.yml
 all:
   hosts:
