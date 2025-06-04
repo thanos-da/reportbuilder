@@ -11,7 +11,7 @@ resource "aws_instance" "rails_app" {
   key_name               = var.key_name
 
   tags = {
-    Name = "RailsAppInstance"
+    Name = "Report Builder"
   }
 }
 
