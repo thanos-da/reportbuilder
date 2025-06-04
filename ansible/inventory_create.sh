@@ -3,11 +3,11 @@
 set -e
 
 # Get IP from Terraform output
-EC2_IP=$(terraform -chdir=../terraform output -raw ec2_public_ip)
+EC2_IP=$(terraform -chdir=../terraform output -raw instance_public_ip)
 
 # Validate
 if [[ -z "$EC2_IP" ]]; then
-  echo "❌ ERROR: Could not get ec2_public_ip from Terraform."
+  echo "ERROR: Could not get ec2_public_ip from Terraform."
   exit 1
 fi
 
