@@ -147,10 +147,11 @@
       loop: "{{ rvm_users }}"
 
     - name: Run Capistrano deployment with branch and username
-      become_user: "{{ deploy_user }}"
       shell: |
-        source ~/.rvm/scripts/rvm
-        cap qa deploy BRANCH={{ deploy_branch }} USERNAME={{ deploy_username }}
+        sudo -u {{ deploy_user }} bash -c '
+          source ~/.rvm/scripts/rvm
+          cd {{ app_path }}
+          cap qa deploy BRANCH={{ deploy_branch }} USERNAME={{ deploy_username }}
+        '
       args:
-        chdir: "{{ app_path }}"
         executable: /bin/bash
