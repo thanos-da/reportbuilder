@@ -1,0 +1,7 @@
+aws_region        = "us-east-1"
+availability_zone = "us-east-1a"
+ami_id            = "ami-07b7f66b629de9364"
+instance_type     = "t3.medium"
+subnet_id         = "subnet-0d2642da77bbfe744"
+security_group_id = "sg-0a18f708db91ef96f"
+key_name          = "shankaraws"

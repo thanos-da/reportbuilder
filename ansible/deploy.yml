@@ -1,0 +1,43 @@
+---
+- name: Deploy Ruby on Rails app using RVM and Capistrano
+  hosts: all
+  become: true
+  vars:
+    ruby_version: "3.0.0"
+    bundler_version: "2.5.1"
+    branch_name: "RB_2025_05_02_RC"
+    cap_username: "rpx"
+    app_path: "/home/ubuntu/rails-app"
+
+  tasks:
+    - name: Start ssh-agent and add private key
+      shell: |
+        eval "$(ssh-agent -s)"
+        ssh-add ~/.ssh/id_rsa_satya
+      become: false
+
+    - name: Use Ruby version via RVM
+      shell: |
+        source /etc/profile.d/rvm.sh
+        rvm use {{ ruby_version }} --default
+      args:
+        executable: /bin/bash
+
+    - name: Install Bundler and bundle install
+      shell: |
+        source /etc/profile.d/rvm.sh
+        rvm use {{ ruby_version }}
+        gem install bundler:{{ bundler_version }}
+        bundle install
+      args:
+        chdir: "{{ app_path }}"
+        executable: /bin/bash
+
+    - name: Run Capistrano deploy
+      shell: |
+        source /etc/profile.d/rvm.sh
+        rvm use {{ ruby_version }}
+        bundle exec cap qa deploy BRANCH={{ branch_name }} USERNAME={{ cap_username }}
+      args:
+        chdir: "{{ app_path }}"
+        executable: /bin/bash
