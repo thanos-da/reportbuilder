@@ -1,5 +1,5 @@
 ---
-- name: Install RVM, Ruby, and Bundler
+- name: Install RVM, Ruby, Bundler, and Deploy App
   hosts: all
   become: true
 
@@ -7,6 +7,10 @@
     rvm_users:
       - ubuntu
     ruby_version: "3.2.2"
+    deploy_user: "rpx"
+    deploy_branch: "RB_2025_05_02_RC"
+    deploy_username: "rpx"
+    app_path: "/home/rpx/app"  # ⬅️ Replace with actual app path
 
   tasks:
 
@@ -22,18 +26,6 @@
           - gnupg2
           - acl
           - software-properties-common
-          - autoconf
-          - bison
-          - build-essential
-          - libssl-dev
-          - libyaml-dev
-          - libreadline6-dev
-          - zlib1g-dev
-          - libncurses5-dev
-          - libffi-dev
-          - libgdbm6
-          - libgdbm-dev
-          - libdb-dev
         state: present
 
     - name: Ensure rvm group exists
@@ -85,6 +77,23 @@
       register: import_pkuczynski
       changed_when: "'imported' in import_pkuczynski.stdout or 'not changed' in import_pkuczynski.stdout"
 
+    - name: Install Ruby build dependencies
+      apt:
+        name:
+          - autoconf
+          - bison
+          - build-essential
+          - libssl-dev
+          - libyaml-dev
+          - libreadline6-dev
+          - zlib1g-dev
+          - libncurses5-dev
+          - libffi-dev
+          - libgdbm6
+          - libgdbm-dev
+          - libdb-dev
+        state: present
+
     - name: Install RVM for each user
       become_user: "{{ item }}"
       shell: curl -sSL https://get.rvm.io | bash -s stable
@@ -110,21 +119,7 @@
         mode: '0644'
       loop: "{{ rvm_users }}"
 
-    - name: Check if Ruby {{ ruby_version }} is already installed for each user
-      become_user: "{{ item }}"
-      shell: |
-        source ~/.rvm/scripts/rvm
-        rvm list strings | grep -Fxq "ruby-{{ ruby_version }}"
-      args:
-        executable: /bin/bash
-      register: ruby_check
-      ignore_errors: true
-      changed_when: false
-      loop: "{{ rvm_users }}"
-      loop_control:
-        index_var: idx
-
-    - name: Install Ruby {{ ruby_version }} if not installed for each user
+    - name: Install Ruby for each user
       become_user: "{{ item }}"
       shell: |
         source ~/.rvm/scripts/rvm
@@ -132,9 +127,6 @@
       args:
         executable: /bin/bash
       loop: "{{ rvm_users }}"
-      loop_control:
-        index_var: idx
-      when: ruby_check.results[idx].rc != 0
 
     - name: Set Ruby {{ ruby_version }} as default for each user
       become_user: "{{ item }}"
@@ -149,7 +141,16 @@
       become_user: "{{ item }}"
       shell: |
         source ~/.rvm/scripts/rvm
-        gem install bundler --no-document
+        gem install bundler
       args:
         executable: /bin/bash
       loop: "{{ rvm_users }}"
+
+    - name: Run Capistrano deployment with branch and username
+      become_user: "{{ deploy_user }}"
+      shell: |
+        source ~/.rvm/scripts/rvm
+        cap qa deploy BRANCH={{ deploy_branch }} USERNAME={{ deploy_username }}
+      args:
+        chdir: "{{ app_path }}"
+        executable: /bin/bash
