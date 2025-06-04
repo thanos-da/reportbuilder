@@ -5,7 +5,7 @@
 
   vars:
     rvm_users:
-      - rpx
+      - ubuntu
     ruby_version: "3.2.2"
     deploy_user: "rpx"
     deploy_branch: "RB_2025_05_02_RC"
