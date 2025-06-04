@@ -9,24 +9,26 @@ pipeline {
   //   ANSIBLE_FORCE_COLOR = "true"
   // }
 
- environment {
-    AWS_CREDS = credentials('aws_credentials') 
-  }
+ // environment {
+ //   AWS_CREDS = credentials('aws_credentials') 
+ // }
 
-  stages {
+ stages {
     stage('Terraform Apply') {
       steps {
-        dir('terraform') {
-             sh '''
-            export AWS_ACCESS_KEY_ID="$AWS_CREDS_USR"
-            export AWS_SECRET_ACCESS_KEY="$AWS_CREDS_PSW"
-            
-            terraform init
-            terraform apply -auto-approve
-          '''
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                          credentialsId: 'aws_credentials']]) {
+          dir('terraform') {
+            sh '''
+              echo "Using AWS credentials from Jenkins"
+              terraform init
+              terraform apply -auto-approve
+            '''
+          }
         }
       }
     }
+  }
 
     stage('Generate Inventory') {
       steps {
