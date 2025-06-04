@@ -24,7 +24,7 @@ pipeline {
     stage('Generate Inventory') {
       steps {
         dir('ansible') {
-          sh './gen_inventory.sh'
+          sh './inventory_create.sh'
         }
       }
     }
