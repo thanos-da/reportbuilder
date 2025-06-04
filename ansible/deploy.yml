@@ -1,43 +1,45 @@
 ---
 - name: Deploy Ruby on Rails app using RVM and Capistrano
-  hosts: all
-  become: true
+  hosts: rails-app
+  become: yes
   vars:
     ruby_version: "3.0.0"
-    bundler_version: "2.5.1"
-    branch_name: "RB_2025_05_02_RC"
-    cap_username: "rpx"
-    app_path: "/home/ubuntu/rails-app"
+    app_user: ubuntu
+    deploy_branch: "{{ branch | default('main') }}"
 
   tasks:
-    #- name: Start ssh-agent and add private key
-     # shell: |
-      #  eval "$(ssh-agent -s)"
-       # ssh-add ~/.ssh/id_rsa_satya
-      #become: false
+    - name: Ensure RVM is installed (basic check)
+      stat:
+        path: /home/{{ app_user }}/.rvm/scripts/rvm
+      register: rvm_check
+
+    - name: Fail if RVM is not installed
+      fail:
+        msg: "RVM not found at /home/{{ app_user }}/.rvm/scripts/rvm. Please install RVM."
+      when: not rvm_check.stat.exists
 
     - name: Use Ruby version via RVM
       shell: |
-        source /etc/profile.d/rvm.sh
+        source /home/{{ app_user }}/.rvm/scripts/rvm
         rvm use {{ ruby_version }} --default
       args:
         executable: /bin/bash
 
-    - name: Install Bundler and bundle install
+    - name: Install bundler and run bundle install
       shell: |
-        source /etc/profile.d/rvm.sh
-        rvm use {{ ruby_version }}
-        gem install bundler:{{ bundler_version }}
+        source /home/{{ app_user }}/.rvm/scripts/rvm
+        rvm use {{ ruby_version }} --default
+        gem install bundler:2.5.1
         bundle install
       args:
-        chdir: "{{ app_path }}"
+        chdir: /path/to/your/app  # update to your app directory on remote
         executable: /bin/bash
 
     - name: Run Capistrano deploy
       shell: |
-        source /etc/profile.d/rvm.sh
-        rvm use {{ ruby_version }}
-        bundle exec cap qa deploy BRANCH={{ branch_name }} USERNAME={{ cap_username }}
+        source /home/{{ app_user }}/.rvm/scripts/rvm
+        rvm use {{ ruby_version }} --default
+        cap qa deploy BRANCH={{ deploy_branch }} USERNAME={{ app_user }}
       args:
-        chdir: "{{ app_path }}"
+        chdir: /path/to/your/app  # update to your app directory on remote
         executable: /bin/bash
