@@ -32,7 +32,7 @@ pipeline {
 
     stage('Deploy with Ansible') {
       steps {
-        withCredentials([file(credentialsId: 'aws_credentials', variable: 'PEM_KEY')]) {
+        withCredentials([file(credentialsId: 'aws_ec2_key', variable: 'PEM_KEY')]) {
           dir('ansible') {
             sh '''
               eval `ssh-agent -s`
