@@ -5,9 +5,9 @@ pipeline {
     string(name: 'BRANCH', defaultValue: 'main', description: 'Git branch to deploy')
   }
 
-  environment {
-    ANSIBLE_FORCE_COLOR = "true"
-  }
+  // environment {
+  //   ANSIBLE_FORCE_COLOR = "true"
+  // }
 
  environment {
     AWS_CREDS = credentials('aws_credentials') 
