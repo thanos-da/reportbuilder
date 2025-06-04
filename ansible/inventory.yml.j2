@@ -1,8 +1,8 @@
 all:
   hosts:
     rails-app:
-      ansible_host: {{ ec2_ip }}
+      ansible_host: "{{ ec2_ip }}"
       ansible_user: ubuntu
-      ansible_ssh_private_key_file: ~/.ssh/id_rsa_satya
+      ansible_ssh_private_key_file: "{{ aws_ec2_key }}"
   vars:
     ansible_python_interpreter: /usr/bin/python3
