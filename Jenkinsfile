@@ -9,11 +9,21 @@ pipeline {
     ANSIBLE_FORCE_COLOR = "true"
   }
 
+ environment {
+    AWS_CREDS = credentials('aws_credentials') 
+  }
+
   stages {
     stage('Terraform Apply') {
       steps {
         dir('terraform') {
-          sh 'terraform init && terraform apply -auto-approve'
+             sh '''
+            export AWS_ACCESS_KEY_ID="$AWS_CREDS_USR"
+            export AWS_SECRET_ACCESS_KEY="$AWS_CREDS_PSW"
+            
+            terraform init
+            terraform apply -auto-approve
+          '''
         }
       }
     }
