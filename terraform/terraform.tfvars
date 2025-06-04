@@ -1,5 +1,5 @@
 aws_region        = "us-east-1"
-availability_zone = "us-east-1a"
+availability_zone = "us-east-1d"
 ami_id            = "ami-07b7f66b629de9364"
 instance_type     = "t3.medium"
 subnet_id         = "subnet-0d2642da77bbfe744"
