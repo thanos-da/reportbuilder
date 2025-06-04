@@ -21,14 +21,22 @@ pipeline {
       }
     }
 
-    stage('Generate Inventory') {
+   stage('Generate Inventory') {
       steps {
-        dir('ansible') {
-          sh 'chmod +x inventory_create.sh'
-          sh './inventory_create.sh'
+        withCredentials([file(credentialsId: 'aws_ec2_key', variable: 'PEM_KEY')]) {
+          withEnv(["SSH_USER=ubuntu"]) {
+            dir('ansible') {
+              sh '''
+                chmod +x inventory_create.sh
+                ./inventory_create.sh
+                echo "--- Generated inventory:"
+                cat inventory.yml
+              '''
+            }
+          }
         }
       }
-    }
+}
 
     stage('Deploy with Ansible') {
       steps {
