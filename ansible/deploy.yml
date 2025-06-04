@@ -14,9 +14,8 @@
       apt:
         update_cache: yes
         upgrade: dist
-      tags: update
 
-    - name: Install system dependencies
+    - name: Install required packages
       apt:
         name:
           - curl
@@ -36,22 +35,21 @@
           - libgdbm-dev
           - libdb-dev
         state: present
-      tags: deps
 
     - name: Ensure rvm group exists
       group:
         name: rvm
         state: present
 
-    - name: Ensure RVM users exist and have home directories
+    - name: Ensure users exist and have home directories
       user:
         name: "{{ item }}"
         state: present
-        shell: /bin/bash
         create_home: yes
+        shell: /bin/bash
       loop: "{{ rvm_users }}"
 
-    - name: Ensure user home directories have correct permissions
+    - name: Ensure each user owns their home directory
       file:
         path: "/home/{{ item }}"
         owner: "{{ item }}"
@@ -60,65 +58,59 @@
         state: directory
       loop: "{{ rvm_users }}"
 
-    - name: Ensure .gnupg directory exists with proper permissions
+    - name: Ensure .gnupg directory exists for each user
       file:
         path: "/home/{{ item }}/.gnupg"
+        state: directory
         owner: "{{ item }}"
         group: "{{ item }}"
         mode: '0700'
-        state: directory
       loop: "{{ rvm_users }}"
 
-    - name: Import RVM GPG keys (mpapis)
+    - name: Import RVM GPG key (mpapis) for each user
       become_user: "{{ item }}"
-      shell: "curl -sSL https://rvm.io/mpapis.asc | gpg --import -"
+      shell: curl -sSL https://rvm.io/mpapis.asc | gpg --import -
       args:
         executable: /bin/bash
       loop: "{{ rvm_users }}"
-      register: gpg_import_mpapis
-      changed_when: "'imported' in gpg_import_mpapis.stdout or 'not changed' in gpg_import_mpapis.stdout"
-      tags: gpg
+      register: import_mpapis
+      changed_when: "'imported' in import_mpapis.stdout or 'not changed' in import_mpapis.stdout"
 
-    - name: Import RVM GPG keys (pkuczynski)
+    - name: Import RVM GPG key (pkuczynski) for each user
       become_user: "{{ item }}"
-      shell: "curl -sSL https://rvm.io/pkuczynski.asc | gpg --import -"
+      shell: curl -sSL https://rvm.io/pkuczynski.asc | gpg --import -
       args:
         executable: /bin/bash
       loop: "{{ rvm_users }}"
-      register: gpg_import_pkuczynski
-      changed_when: "'imported' in gpg_import_pkuczynski.stdout or 'not changed' in gpg_import_pkuczynski.stdout"
-      tags: gpg
+      register: import_pkuczynski
+      changed_when: "'imported' in import_pkuczynski.stdout or 'not changed' in import_pkuczynski.stdout"
 
-    - name: Install RVM (if not installed)
+    - name: Install RVM for each user
       become_user: "{{ item }}"
-      shell: |
-        if [ ! -d "$HOME/.rvm" ]; then
-          curl -sSL https://get.rvm.io | bash -s stable
-        fi
+      shell: curl -sSL https://get.rvm.io | bash -s stable
       args:
         executable: /bin/bash
       loop: "{{ rvm_users }}"
-      tags: rvm
 
-    - name: Add user to rvm group
+    - name: Add users to rvm group
       user:
         name: "{{ item }}"
         groups: rvm
         append: yes
       loop: "{{ rvm_users }}"
 
-    - name: Enable RVM in bashrc
+    - name: Enable RVM in bashrc for each user
       lineinfile:
         path: "/home/{{ item }}/.bashrc"
-        line: 'source ~/.rvm/scripts/rvm'
+        line: 'source /etc/profile.d/rvm.sh'
+        state: present
         insertafter: EOF
         owner: "{{ item }}"
         group: "{{ item }}"
         mode: '0644'
-        state: present
       loop: "{{ rvm_users }}"
 
-    - name: Check if Ruby {{ ruby_version }} is already installed
+    - name: Check if Ruby {{ ruby_version }} is already installed for each user
       become_user: "{{ item }}"
       shell: |
         source ~/.rvm/scripts/rvm
@@ -129,21 +121,22 @@
       ignore_errors: true
       changed_when: false
       loop: "{{ rvm_users }}"
-      tags: ruby
+      loop_control:
+        index_var: idx
 
-    - name: Install Ruby if not already installed
+    - name: Install Ruby {{ ruby_version }} if not installed for each user
       become_user: "{{ item }}"
       shell: |
         source ~/.rvm/scripts/rvm
         rvm install {{ ruby_version }}
       args:
         executable: /bin/bash
-      when: ruby_check.results[ansible_loop.index0].rc != 0
       loop: "{{ rvm_users }}"
-      tags: ruby
+      loop_control:
+        index_var: idx
+      when: ruby_check.results[idx].rc != 0
 
-
-    - name: Set Ruby {{ ruby_version }} as default
+    - name: Set Ruby {{ ruby_version }} as default for each user
       become_user: "{{ item }}"
       shell: |
         source ~/.rvm/scripts/rvm
@@ -151,9 +144,8 @@
       args:
         executable: /bin/bash
       loop: "{{ rvm_users }}"
-      tags: ruby
 
-    - name: Install bundler gem
+    - name: Install bundler gem for each user
       become_user: "{{ item }}"
       shell: |
         source ~/.rvm/scripts/rvm
@@ -161,20 +153,3 @@
       args:
         executable: /bin/bash
       loop: "{{ rvm_users }}"
-      tags: bundler
-
-    - name: Show installed Ruby versions
-      become_user: "{{ item }}"
-      shell: |
-        source ~/.rvm/scripts/rvm
-        ruby -v
-      args:
-        executable: /bin/bash
-      loop: "{{ rvm_users }}"
-      register: ruby_version_output
-      tags: debug
-
-    - name: Debug Ruby version output
-      debug:
-        msg: "{{ ruby_version_output.results | map(attribute='stdout') | list }}"
-      tags: debug
