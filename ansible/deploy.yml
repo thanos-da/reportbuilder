@@ -1,45 +1,179 @@
 ---
-- name: Deploy Ruby on Rails app using RVM and Capistrano
-  hosts: rails-app
-  become: yes
+- name: Install RVM, Ruby, and Bundler
+  hosts: all
+  become: true
+
   vars:
-    ruby_version: "3.0.0"
-    app_user: ubuntu
-    deploy_branch: "{{ branch | default('main') }}"
+    rvm_users:
+      - ubuntu
+    ruby_version: "3.2.2"
 
   tasks:
-    - name: Ensure RVM is installed (basic check)
-      stat:
-        path: /home/{{ app_user }}/.rvm/scripts/rvm
-      register: rvm_check
 
-    - name: Fail if RVM is not installed
-      fail:
-        msg: "RVM not found at /home/{{ app_user }}/.rvm/scripts/rvm. Please install RVM."
-      when: not rvm_check.stat.exists
+    - name: Update and upgrade apt packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+      tags: update
 
-    - name: Use Ruby version via RVM
+    - name: Install system dependencies
+      apt:
+        name:
+          - curl
+          - gnupg2
+          - acl
+          - software-properties-common
+          - autoconf
+          - bison
+          - build-essential
+          - libssl-dev
+          - libyaml-dev
+          - libreadline6-dev
+          - zlib1g-dev
+          - libncurses5-dev
+          - libffi-dev
+          - libgdbm6
+          - libgdbm-dev
+          - libdb-dev
+        state: present
+      tags: deps
+
+    - name: Ensure rvm group exists
+      group:
+        name: rvm
+        state: present
+
+    - name: Ensure RVM users exist and have home directories
+      user:
+        name: "{{ item }}"
+        state: present
+        shell: /bin/bash
+        create_home: yes
+      loop: "{{ rvm_users }}"
+
+    - name: Ensure user home directories have correct permissions
+      file:
+        path: "/home/{{ item }}"
+        owner: "{{ item }}"
+        group: "{{ item }}"
+        mode: '0755'
+        state: directory
+      loop: "{{ rvm_users }}"
+
+    - name: Ensure .gnupg directory exists with proper permissions
+      file:
+        path: "/home/{{ item }}/.gnupg"
+        owner: "{{ item }}"
+        group: "{{ item }}"
+        mode: '0700'
+        state: directory
+      loop: "{{ rvm_users }}"
+
+    - name: Import RVM GPG keys (mpapis)
+      become_user: "{{ item }}"
+      shell: "curl -sSL https://rvm.io/mpapis.asc | gpg --import -"
+      args:
+        executable: /bin/bash
+      loop: "{{ rvm_users }}"
+      register: gpg_import_mpapis
+      changed_when: "'imported' in gpg_import_mpapis.stdout or 'not changed' in gpg_import_mpapis.stdout"
+      tags: gpg
+
+    - name: Import RVM GPG keys (pkuczynski)
+      become_user: "{{ item }}"
+      shell: "curl -sSL https://rvm.io/pkuczynski.asc | gpg --import -"
+      args:
+        executable: /bin/bash
+      loop: "{{ rvm_users }}"
+      register: gpg_import_pkuczynski
+      changed_when: "'imported' in gpg_import_pkuczynski.stdout or 'not changed' in gpg_import_pkuczynski.stdout"
+      tags: gpg
+
+    - name: Install RVM (if not installed)
+      become_user: "{{ item }}"
       shell: |
-        source /home/{{ app_user }}/.rvm/scripts/rvm
+        if [ ! -d "$HOME/.rvm" ]; then
+          curl -sSL https://get.rvm.io | bash -s stable
+        fi
+      args:
+        executable: /bin/bash
+      loop: "{{ rvm_users }}"
+      tags: rvm
+
+    - name: Add user to rvm group
+      user:
+        name: "{{ item }}"
+        groups: rvm
+        append: yes
+      loop: "{{ rvm_users }}"
+
+    - name: Enable RVM in bashrc
+      lineinfile:
+        path: "/home/{{ item }}/.bashrc"
+        line: 'source ~/.rvm/scripts/rvm'
+        insertafter: EOF
+        owner: "{{ item }}"
+        group: "{{ item }}"
+        mode: '0644'
+        state: present
+      loop: "{{ rvm_users }}"
+
+    - name: Check if Ruby {{ ruby_version }} is already installed
+      become_user: "{{ item }}"
+      shell: |
+        source ~/.rvm/scripts/rvm
+        rvm list strings | grep -Fxq "ruby-{{ ruby_version }}"
+      args:
+        executable: /bin/bash
+      register: ruby_check
+      ignore_errors: true
+      changed_when: false
+      loop: "{{ rvm_users }}"
+      tags: ruby
+
+    - name: Install Ruby if not already installed
+      become_user: "{{ item }}"
+      shell: |
+        source ~/.rvm/scripts/rvm
+        rvm install {{ ruby_version }}
+      args:
+        executable: /bin/bash
+      when: ruby_check.results[loop.index0].rc != 0
+      loop: "{{ rvm_users }}"
+      tags: ruby
+
+    - name: Set Ruby {{ ruby_version }} as default
+      become_user: "{{ item }}"
+      shell: |
+        source ~/.rvm/scripts/rvm
         rvm use {{ ruby_version }} --default
       args:
         executable: /bin/bash
+      loop: "{{ rvm_users }}"
+      tags: ruby
 
-    - name: Install bundler and run bundle install
+    - name: Install bundler gem
+      become_user: "{{ item }}"
       shell: |
-        source /home/{{ app_user }}/.rvm/scripts/rvm
-        rvm use {{ ruby_version }} --default
-        gem install bundler:2.5.1
-        bundle install
+        source ~/.rvm/scripts/rvm
+        gem install bundler --no-document
       args:
-        chdir: /path/to/your/app  # update to your app directory on remote
         executable: /bin/bash
+      loop: "{{ rvm_users }}"
+      tags: bundler
 
-    - name: Run Capistrano deploy
+    - name: Show installed Ruby versions
+      become_user: "{{ item }}"
       shell: |
-        source /home/{{ app_user }}/.rvm/scripts/rvm
-        rvm use {{ ruby_version }} --default
-        cap qa deploy BRANCH={{ deploy_branch }} USERNAME={{ app_user }}
+        source ~/.rvm/scripts/rvm
+        ruby -v
       args:
-        chdir: /path/to/your/app  # update to your app directory on remote
         executable: /bin/bash
+      loop: "{{ rvm_users }}"
+      register: ruby_version_output
+      tags: debug
+
+    - name: Debug Ruby version output
+      debug:
+        msg: "{{ ruby_version_output.results | map(attribute='stdout') | list }}"
+      tags: debug
