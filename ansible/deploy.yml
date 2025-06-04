@@ -138,9 +138,10 @@
         rvm install {{ ruby_version }}
       args:
         executable: /bin/bash
-      when: ruby_check.results[loop.index0].rc != 0
+      when: ruby_check.results[ansible_loop.index0].rc != 0
       loop: "{{ rvm_users }}"
       tags: ruby
+
 
     - name: Set Ruby {{ ruby_version }} as default
       become_user: "{{ item }}"
