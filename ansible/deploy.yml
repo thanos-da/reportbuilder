@@ -10,11 +10,11 @@
     app_path: "/home/ubuntu/rails-app"
 
   tasks:
-    - name: Start ssh-agent and add private key
-      shell: |
-        eval "$(ssh-agent -s)"
-        ssh-add ~/.ssh/id_rsa_satya
-      become: false
+    #- name: Start ssh-agent and add private key
+     # shell: |
+      #  eval "$(ssh-agent -s)"
+       # ssh-add ~/.ssh/id_rsa_satya
+      #become: false
 
     - name: Use Ruby version via RVM
       shell: |
