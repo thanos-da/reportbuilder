@@ -5,15 +5,7 @@ pipeline {
     string(name: 'BRANCH', defaultValue: 'main', description: 'Git branch to deploy')
   }
 
-  // environment {
-  //   ANSIBLE_FORCE_COLOR = "true"
-  // }
-
- // environment {
- //   AWS_CREDS = credentials('aws_credentials') 
- // }
-
- stages {
+  stages {
     stage('Terraform Apply') {
       steps {
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
@@ -28,7 +20,6 @@ pipeline {
         }
       }
     }
-  }
 
     stage('Generate Inventory') {
       steps {
