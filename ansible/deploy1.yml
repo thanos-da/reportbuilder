@@ -1,0 +1,105 @@
+---
+- name: Create AWS user with auto-generated Jenkins key
+  hosts: all
+  become: true
+  vars:
+    new_username: "rpx"
+    jenkins_user: "ubuntu"
+    jenkins_host: "54.173.135.9" 
+    jenkins_key_path: "/var/lib/ubuntu/.ssh/id_ansible_{{ new_username }}"
+    sudoers_file: "/etc/sudoers.d/90-{{ new_username }}"
+
+  tasks:
+    ### Part 1: Generate SSH key on Jenkins machine if not exists ###
+    - name: Check if SSH key exists on Jenkins
+      delegate_to: "{{ jenkins_host }}"
+      become: true
+      become_user: "{{ jenkins_user }}"
+      stat:
+        path: "{{ jenkins_key_path }}"
+      register: jenkins_key_stat
+      tags: keygen
+
+    - name: Generate SSH key pair on Jenkins
+      delegate_to: "{{ jenkins_host }}"
+      become: true
+      become_user: "{{ jenkins_user }}"
+      community.crypto.openssh_keypair:
+        path: "{{ jenkins_key_path }}"
+        type: rsa
+        size: 4096
+        state: present
+        owner: "{{ jenkins_user }}"
+        group: "{{ jenkins_user }}"
+        mode: '0600'
+      when: not jenkins_key_stat.stat.exists
+      tags: keygen
+
+    - name: Read public key from Jenkins
+      delegate_to: "{{ jenkins_host }}"
+      become: true
+      become_user: "{{ jenkins_user }}"
+      slurp:
+        src: "{{ jenkins_key_path }}.pub"
+      register: jenkins_pubkey
+      tags: keygen
+
+    - name: Decode Jenkins public key
+      set_fact:
+        jenkins_public_key: "{{ jenkins_pubkey.content | b64decode }}"
+      tags: keygen
+
+    ### Part 2: Configure AWS server ###
+    - name: Create new user
+      user:
+        name: "{{ new_username }}"
+        shell: /bin/bash
+        groups: sudo
+        append: yes
+        create_home: yes
+        home: "/home/{{ new_username }}"
+        password_lock: yes
+
+    - name: Create .ssh directory
+      file:
+        path: "/home/{{ new_username }}/.ssh"
+        state: directory
+        mode: 0700
+        owner: "{{ new_username }}"
+        group: "{{ new_username }}"
+
+    - name: Add Jenkins public key to authorized_keys
+      copy:
+        content: "{{ jenkins_public_key }}"
+        dest: "/home/{{ new_username }}/.ssh/authorized_keys"
+        owner: "{{ new_username }}"
+        group: "{{ new_username }}"
+        mode: 0600
+
+    - name: Configure sudo access
+      copy:
+        content: "{{ new_username }} ALL=(ALL) NOPASSWD:ALL\n"
+        dest: "{{ sudoers_file }}"
+        mode: 0440
+
+    - name: Disable password authentication
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^PasswordAuthentication"
+        line: "PasswordAuthentication no"
+        state: present
+      notify: restart sshd
+
+    - name: Configure SSH allowed users
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^AllowUsers"
+        line: "AllowUsers {{ new_username }} ubuntu"
+        state: present
+      notify: restart sshd
+
+  handlers:
+    - name: restart sshd
+      service:
+        name: sshd
+        state: restarted
