@@ -4,7 +4,7 @@
   become: true
   vars:
     new_username: "deployer"
-    jenkins_user: "jenkins"
+    jenkins_user: "ubuntu"
     jenkins_host: "54.173.135.9"
     jenkins_key_path: "/var/lib/jenkins/.ssh/id_ansible_{{ new_username }}"
     sudoers_file: "/etc/sudoers.d/90-{{ new_username }}"
