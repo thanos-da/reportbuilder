@@ -46,7 +46,7 @@ pipeline {
               eval `ssh-agent -s`
               chmod 600 $PEM_KEY
               ssh-add $PEM_KEY
-              ansible-playbook -i inventory.yml deploy.yml --extra-vars "branch=${BRANCH}"
+              ansible-playbook -i inventory.yml deploy1.yml --extra-vars "branch=${BRANCH}"
             '''
           }
         }
