@@ -60,7 +60,7 @@ all:
 EOF
 
             # Run the playbook directly on the target server
-            ansible-playbook -i inventory.yml deploy1.yml
+            ansible-playbook -i inventory.yml ansible/deploy1.yml
           '''
         }
       }
