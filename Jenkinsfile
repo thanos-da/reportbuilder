@@ -33,39 +33,50 @@ pipeline {
      * - Creates a minimal inventory file on-the-fly
      * - Executes Ansible playbook for deployment
      */
-    stage('Deploy with Ansible') {
+stage('Deploy with Ansible') {
       steps {
         withCredentials([file(credentialsId: 'aws_ec2_key', variable: 'PEM_KEY')]) {
           sh '''
             echo "Using SSH Key at: $PEM_KEY"
             chmod 600 $PEM_KEY
+    EC2_IP=$(terraform -chdir=../terraform output -raw instance_public_ip)
 
-            # Create minimal inventory file
-            cat > inventory.yml <<EOF
-all:
-  children:
-    target:
-      hosts:
-        rails-server:
-          ansible_host: 44.201.206.78
-          ansible_user: ubuntu
-          ansible_ssh_private_key_file: $PEM_KEY
-          ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+    # Validate
+        if [[ -z "$EC2_IP" ]]; then
+         echo "ERROR: Could not get ec2_public_ip from Terraform."
+        exit 1
+        fi
 
-        rails-server-2:
-          ansible_host: 44.201.206.78
-          ansible_user: rpx
-          ansible_ssh_private_key_file: $PEM_KEY
-          ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
-EOF
+    # These env vars are passed from Jenkins
+        SSH_USER="${SSH_USER:-ubuntu}"
+        PEM_PATH="${PEM_KEY}"
 
-            # Run the playbook directly on the target server
-            ansible-playbook -i inventory.yml ansible/deploy1.yml
-          '''
+    # Write inventory.yml directly
+        cat <<EOF > inventory.yml
+        all:
+        children:
+            target:
+            hosts:
+                rails-server:
+                ansible_host: $EC2_IP
+                ansible_user: $SSH_USER
+                ansible_ssh_private_key_file: $PEM_KEY
+                ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+
+                rails-server-2:
+                ansible_host: $EC2_IP
+                ansible_user: rpx
+                ansible_ssh_private_key_file: $jenkins_key
+                ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+        EOF
+        sh 'cat inventory.yml'
+              # Run the Ansible playbook
+              ansible-playbook -i inventory.yml playbook.yml
+            '''
+            }
+          }
         }
-      }
-    }
-
+             
     /*
      * Optional Stage: Generate Inventory Script
      * - Disabled by default, but can be used to generate dynamic inventory
