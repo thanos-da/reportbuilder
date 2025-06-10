@@ -49,7 +49,7 @@ all:
   children:
     target:
       hosts:
-        rails-server:
+        rails-server-1:
           ansible_host: ${ec2_ip}
           ansible_user: ubuntu
           ansible_ssh_private_key_file: ${PEM_KEY}
