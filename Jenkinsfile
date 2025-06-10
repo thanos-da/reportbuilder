@@ -5,41 +5,71 @@ pipeline {
     string(name: 'BRANCH', defaultValue: 'main', description: 'Git branch to deploy')
   }
 
+  environment {
+    // Define workspace-relative paths once
+    TF_DIR = 'terraform'
+    ANSIBLE_DIR = 'ansible'
+  }
+
   stages {
     stage('Terraform Apply') {
       steps {
-        withCredentials([[
-          $class: 'AmazonWebServicesCredentialsBinding',
-          credentialsId: 'aws_credentials'
-        ]]) {
-          dir('terraform') {
-            sh '''
-              echo "Using AWS credentials from Jenkins"
-              terraform init -input=false
-              terraform validate
-              terraform apply -auto-approve
-            '''
+        script {
+          withCredentials([[
+            $class: 'AmazonWebServicesCredentialsBinding',
+            credentialsId: 'aws_credentials'
+          ]]) {
+            dir(TF_DIR) {
+              sh '''
+                echo "Initializing Terraform..."
+                terraform init -input=false
+                terraform validate
+                echo "Applying Terraform configuration..."
+                terraform apply -auto-approve
+              '''
+            }
           }
         }
-        def maxRetries = 30
-        def retryCount = 0
-        def sshSuccess = false
-        
-        while (retryCount < maxRetries && !sshSuccess) {
-          try {
-            // Test SSH connection using netcat or ssh directly
-            sh """
-              echo "Waiting for SSH (Attempt ${retryCount + 1}/${maxRetries})..."
-              nc -zv -w 5 ${ec2_ip} 22 && echo "SSH port open" || exit 1
-              # Alternative: ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no ubuntu@${ec2_ip} exit
-            """
-            sshSuccess = true
-          } catch (Exception e) {
-            retryCount++
-            if (retryCount >= maxRetries) {
-              error("SSH never became available on ${ec2_ip}")
+      }
+    }
+
+    stage('Wait for SSH') {
+      steps {
+        script {
+          // Get EC2 IP from Terraform output
+          def ec2_ip = sh(
+            script: "terraform -chdir=${env.WORKSPACE}/${TF_DIR} output -raw instance_public_ip",
+            returnStdout: true
+          ).trim()
+
+          if (!ec2_ip) {
+            error("ERROR: Could not get EC2 public IP from Terraform output")
+          }
+
+          // Store IP for later stages
+          env.EC2_IP = ec2_ip
+
+          def maxRetries = 30
+          def retryCount = 0
+          def sshSuccess = false
+          
+          echo "Waiting for SSH to be available on ${ec2_ip}..."
+          
+          while (retryCount < maxRetries && !sshSuccess) {
+            try {
+              sh """
+                echo "Attempt ${retryCount + 1}/${maxRetries}..."
+                nc -zv -w 5 ${ec2_ip} 22
+              """
+              sshSuccess = true
+              echo "SSH connection successful!"
+            } catch (Exception e) {
+              retryCount++
+              if (retryCount >= maxRetries) {
+                error("SSH never became available on ${ec2_ip} after ${maxRetries} attempts")
+              }
+              sleep(time: 10, unit: 'SECONDS')
             }
-            sleep(time: 10, unit: 'SECONDS') // Wait 10 seconds between tries
           }
         }
       }
@@ -47,49 +77,42 @@ pipeline {
 
     stage('Deploy with Ansible') {
       steps {
-        withCredentials([
-          file(credentialsId: 'aws_ec2_key', variable: 'PEM_KEY'),
-          sshUserPrivateKey(credentialsId: 'jenkins_key', keyFileVariable: 'JEN_KEY', usernameVariable: 'JEN_USER')
-        ]) {
-          script {
-            // Get EC2 IP
-            def ec2_ip = sh(
-              script: "terraform -chdir=${env.WORKSPACE}/terraform output -raw instance_public_ip",
-              returnStdout: true
-            ).trim()
-
-            if (!ec2_ip) {
-              error("ERROR: Could not get ec2_public_ip from Terraform.")
-            }
-            
+        script {
+          withCredentials([
+            file(credentialsId: 'aws_ec2_key', variable: 'PEM_KEY'),
+            sshUserPrivateKey(
+              credentialsId: 'jenkins_key',
+              keyFileVariable: 'JEN_KEY',
+              usernameVariable: 'JEN_USER'
+            )
+          ]) {
             // Set proper permissions for keys
-        sh """
-          chmod 600 ${JEN_KEY} ${PEM_KEY}
-          ssh-keygen -y -f ${JEN_KEY} || echo 'Key verification failed'
-        """
-            // Create inventory
+            sh """
+              chmod 600 ${JEN_KEY} ${PEM_KEY}
+              ssh-keygen -y -f ${JEN_KEY} >/dev/null || echo 'Warning: Key verification failed'
+            """
+
+            // Create dynamic inventory
             writeFile file: 'inventory.yml', text: """
 all:
   hosts:
     rails-server-1:
-      ansible_host: ${ec2_ip}
+      ansible_host: ${env.EC2_IP}
       ansible_user: ubuntu
       ansible_ssh_private_key_file: ${PEM_KEY}
-      # Consider setting host key checking in a more secure way
-      ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+      ansible_ssh_common_args: '-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=accept-new'
     rails-server-2:
-      ansible_host: ${ec2_ip}
+      ansible_host: ${env.EC2_IP}
       ansible_user: rpx
       ansible_ssh_private_key_file: ${JEN_KEY}
-      # Consider setting host key checking in a more secure way
-      ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+      ansible_ssh_common_args: '-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=accept-new'
 """
 
             // Verify inventory
             sh 'cat inventory.yml'
 
             // Run playbook with verbose output for debugging
-            sh 'ansible-playbook -i inventory.yml -vv ansible/deploy.yml'
+            sh "ansible-playbook -i inventory.yml -vv ${ANSIBLE_DIR}/deploy.yml"
           }
         }
       }
@@ -98,12 +121,16 @@ all:
 
   post {
     failure {
-      // Send failure notification
       echo 'Pipeline failed!'
+      // Add actual notification (Slack, email, etc.)
     }
     success {
-      // Send success notification
       echo 'Pipeline succeeded!'
+      // Add actual notification (Slack, email, etc.)
+    }
+    always {
+      echo 'Pipeline completed. Cleaning up...'
+      // Add any cleanup steps
     }
   }
 }
