@@ -21,6 +21,27 @@ pipeline {
             '''
           }
         }
+        def maxRetries = 30
+        def retryCount = 0
+        def sshSuccess = false
+        
+        while (retryCount < maxRetries && !sshSuccess) {
+          try {
+            // Test SSH connection using netcat or ssh directly
+            sh """
+              echo "Waiting for SSH (Attempt ${retryCount + 1}/${maxRetries})..."
+              nc -zv -w 5 ${ec2_ip} 22 && echo "SSH port open" || exit 1
+              # Alternative: ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no ubuntu@${ec2_ip} exit
+            """
+            sshSuccess = true
+          } catch (Exception e) {
+            retryCount++
+            if (retryCount >= maxRetries) {
+              error("SSH never became available on ${ec2_ip}")
+            }
+            sleep(time: 10, unit: 'SECONDS') // Wait 10 seconds between tries
+          }
+        }
       }
     }
 
