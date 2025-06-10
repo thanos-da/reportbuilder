@@ -61,8 +61,8 @@
       notify: Restart sshd
 
   handlers:
-    - name: Restart sshd
-      ansible.builtin.service:
+    - name: restart sshd
+      service:
         name: sshd
         state: restarted
         
