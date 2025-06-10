@@ -68,7 +68,7 @@ all:
             sh 'cat inventory.yml'
 
             // Run playbook with verbose output for debugging
-            sh 'ansible-playbook -i inventory.yml -vv ansible/deploy1.yml'
+            sh 'ansible-playbook -i inventory.yml -vv ansible/deploy.yml'
           }
         }
       }
@@ -76,10 +76,6 @@ all:
   }
 
   post {
-    always {
-      // Cleanup or notifications could go here
-      echo 'Pipeline completed - cleanup if needed'
-    }
     failure {
       // Send failure notification
       echo 'Pipeline failed!'
