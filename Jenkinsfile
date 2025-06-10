@@ -34,14 +34,22 @@ pipeline {
      * - Executes Ansible playbook for deployment
      */
 stage('Deploy with Ansible') {
-  steps {
-    withCredentials([file(credentialsId: 'aws_ec2_key', variable: 'PEM_KEY')]) {
-      script {
-        def ec2_ip = sh(script: "terraform -chdir=${env.WORKSPACE}/terraform output -raw instance_public_ip", returnStdout: true).trim()
+ steps {
+  // Load both PEM keys at once
+  withCredentials([
+    file(credentialsId: 'aws_ec2_key', variable: 'PEM_KEY'),
+    file(credentialsId: 'jenkins_key', variable: 'JEN_KEY')
+  ]) {
+    script {
+      // Run Terraform to get the EC2 IP address
+      def ec2_ip = sh(
+        script: "terraform -chdir=${env.WORKSPACE}/terraform output -raw instance_public_ip",
+        returnStdout: true
+      ).trim()
 
-        if (!ec2_ip) {
-          error("ERROR: Could not get ec2_public_ip from Terraform.")
-        }
+      if (!ec2_ip) {
+        error("ERROR: Could not get ec2_public_ip from Terraform.")
+      }
 
         // Create inventory.yml
         writeFile file: 'inventory.yml', text: """
@@ -58,7 +66,7 @@ all:
         rails-server-2:
           ansible_host: ${ec2_ip}
           ansible_user: rpx
-          ansible_ssh_private_key_file: ${PEM_KEY}
+          ansible_ssh_private_key_file: ${JEN_KEY}
           ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
 """
 
