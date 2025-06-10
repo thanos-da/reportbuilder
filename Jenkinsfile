@@ -34,91 +34,44 @@ pipeline {
      * - Executes Ansible playbook for deployment
      */
 stage('Deploy with Ansible') {
-      steps {
-        withCredentials([file(credentialsId: 'aws_ec2_key', variable: 'PEM_KEY')]) {
-          sh '''
-            echo "Using SSH Key at: $PEM_KEY"
-            chmod 600 $PEM_KEY
-    EC2_IP=$(terraform -chdir=$WORKSPACE/terraform output -raw instance_public_ip)
+  steps {
+    withCredentials([file(credentialsId: 'aws_ec2_key', variable: 'PEM_KEY')]) {
+      script {
+        def ec2_ip = sh(script: "terraform -chdir=${env.WORKSPACE}/terraform output -raw instance_public_ip", returnStdout: true).trim()
 
-    # Validate
-        if [[ -z "$EC2_IP" ]]; then
-         echo "ERROR: Could not get ec2_public_ip from Terraform."
-        exit 1
-        fi
+        if (!ec2_ip) {
+          error("ERROR: Could not get ec2_public_ip from Terraform.")
+        }
 
-    # These env vars are passed from Jenkins
-        SSH_USER="${SSH_USER:-ubuntu}"
-        PEM_PATH="${PEM_KEY}"
+        // Create inventory.yml
+        writeFile file: 'inventory.yml', text: """
+all:
+  children:
+    target:
+      hosts:
+        rails-server:
+          ansible_host: ${ec2_ip}
+          ansible_user: ubuntu
+          ansible_ssh_private_key_file: ${PEM_KEY}
+          ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
 
-    # Write inventory.yml directly
-        cat <<EOF > inventory.yml
-        all:
-        children:
-            target:
-            hosts:
-                rails-server:
-                ansible_host: $EC2_IP
-                ansible_user: $SSH_USER
-                ansible_ssh_private_key_file: $PEM_KEY
-                ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+        rails-server-2:
+          ansible_host: ${ec2_ip}
+          ansible_user: rpx
+          ansible_ssh_private_key_file: ${PEM_KEY}
+          ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+"""
 
-                rails-server-2:
-                ansible_host: $EC2_IP
-                ansible_user: rpx
-                ansible_ssh_private_key_file: $jenkins_key
-                ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
-        EOF
         sh 'cat inventory.yml'
-              # Run the Ansible playbook
-              ansible-playbook -i inventory.yml playbook.yml
-            '''
-            }
-          }
-        }
-             
-    /*
-     * Optional Stage: Generate Inventory Script
-     * - Disabled by default, but can be used to generate dynamic inventory
-     */
-    /*
-    stage('Generate Inventory') {
-      steps {
-        withCredentials([file(credentialsId: 'aws_ec2_key', variable: 'PEM_KEY')]) {
-          withEnv(["SSH_USER=ubuntu"]) {
-            dir('ansible') {
-              sh '''
-                chmod +x inventory_create.sh
-                ./inventory_create.sh
-                echo "--- Generated inventory:"
-                cat inventory.yml
-              '''
-            }
-          }
-        }
-      }
-    }
-    */
 
-    /*
-     * Optional Stage: Alternative Deploy with Ansible
-     * - Commented out as it's an alternative to the earlier Ansible deploy stage
-     */
-    /*
-    stage('Deploy with Ansible') {
-      steps {
-        withCredentials([file(credentialsId: 'aws_ec2_key', variable: 'PEM_KEY')]) {
-          dir('ansible') {
-            sh '''
-              eval `ssh-agent -s`
-              chmod 600 $PEM_KEY
-              ssh-add $PEM_KEY
-              ansible-playbook -i inventory.yml deploy1.yml --extra-vars "branch=${BRANCH}"
-            '''
-          }
-        }
+        // Run Ansible
+        sh """
+          chmod 600 ${PEM_KEY}
+          ansible-playbook -i inventory.yml playbook.yml
+        """
       }
     }
-    */
+  }
+}
   }
 }
