@@ -6,16 +6,12 @@ pipeline {
   }
 
   stages {
-
-    /* 
-     * Stage: Terraform Apply
-     * - Initializes and applies Terraform configuration
-     * - Uses AWS credentials stored in Jenkins
-     */
     stage('Terraform Apply') {
       steps {
-        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
-                          credentialsId: 'aws_credentials']]) {
+        withCredentials([[
+          $class: 'AmazonWebServicesCredentialsBinding',
+          credentialsId: 'aws_credentials'
+        ]]) {
           dir('terraform') {
             sh '''
               echo "Using AWS credentials from Jenkins"
@@ -27,31 +23,23 @@ pipeline {
       }
     }
 
-    /* 
-     * Stage: Deploy with Ansible
-     * - Uses PEM key to SSH into EC2 instance(s)
-     * - Creates a minimal inventory file on-the-fly
-     * - Executes Ansible playbook for deployment
-     */
-stage('Deploy with Ansible') {
- steps {
-  // Load both PEM keys at once
-    file(credentialsId: 'aws_ec2_key', variable: 'PEM_KEY'),
-    sshUserPrivateKey(credentialsId: 'jenkins_key', keyFileVariable: 'JEN_KEY', usernameVariable: 'JEN_USER')
-  ]) {
-    script {
-      // Run Terraform to get the EC2 IP address
-      def ec2_ip = sh(
-        script: "terraform -chdir=${env.WORKSPACE}/terraform output -raw instance_public_ip",
-        returnStdout: true
-      ).trim()
+    stage('Deploy with Ansible') {
+      steps {
+        withCredentials([
+          file(credentialsId: 'aws_ec2_key', variable: 'PEM_KEY'),
+          sshUserPrivateKey(credentialsId: 'jenkins_key', keyFileVariable: 'JEN_KEY', usernameVariable: 'JEN_USER')
+        ]) {
+          script {
+            def ec2_ip = sh(
+              script: "terraform -chdir=${env.WORKSPACE}/terraform output -raw instance_public_ip",
+              returnStdout: true
+            ).trim()
 
-      if (!ec2_ip) {
-        error("ERROR: Could not get ec2_public_ip from Terraform.")
-      }
+            if (!ec2_ip) {
+              error("ERROR: Could not get ec2_public_ip from Terraform.")
+            }
 
-        // Create inventory.yml
-        writeFile file: 'inventory.yml', text: """
+            writeFile file: 'inventory.yml', text: """
 all:
   children:
     target:
@@ -69,16 +57,15 @@ all:
           ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
 """
 
-        sh 'cat inventory.yml'
+            sh 'cat inventory.yml'
 
-        // Run Ansible
-        sh """
-          chmod 600 ${PEM_KEY}
-          ansible-playbook -i inventory.yml ansible/deploy1.yml
-        """
+            sh """
+              chmod 600 ${PEM_KEY} ${JEN_KEY}
+              ansible-playbook -i inventory.yml ansible/deploy1.yml
+            """
+          }
+        }
       }
     }
-  }
-}
   }
 }
