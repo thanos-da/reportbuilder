@@ -38,6 +38,7 @@ pipeline {
             if (!ec2_ip) {
               error("ERROR: Could not get ec2_public_ip from Terraform.")
             }
+            sh chmod 600 ${PEM_KEY} ${JEN_KEY}
 
             writeFile file: 'inventory.yml', text: """
 all:
