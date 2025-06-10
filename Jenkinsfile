@@ -39,7 +39,7 @@ stage('Deploy with Ansible') {
           sh '''
             echo "Using SSH Key at: $PEM_KEY"
             chmod 600 $PEM_KEY
-    EC2_IP=$(terraform -chdir=../terraform output -raw instance_public_ip)
+    EC2_IP=$(terraform -chdir=$WORKSPACE/terraform output -raw instance_public_ip)
 
     # Validate
         if [[ -z "$EC2_IP" ]]; then
