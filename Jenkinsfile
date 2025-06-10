@@ -67,7 +67,7 @@ all:
         // Run Ansible
         sh """
           chmod 600 ${PEM_KEY}
-          ansible-playbook -i inventory.yml playbook.yml
+          ansible-playbook -i inventory.yml ansible/deploy1.yml
         """
       }
     }
