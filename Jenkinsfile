@@ -15,7 +15,8 @@ pipeline {
           dir('terraform') {
             sh '''
               echo "Using AWS credentials from Jenkins"
-              terraform init
+              terraform init -input=false
+              terraform validate
               terraform apply -auto-approve
             '''
           }
@@ -30,6 +31,7 @@ pipeline {
           sshUserPrivateKey(credentialsId: 'jenkins_key', keyFileVariable: 'JEN_KEY', usernameVariable: 'JEN_USER')
         ]) {
           script {
+            // Get EC2 IP
             def ec2_ip = sh(
               script: "terraform -chdir=${env.WORKSPACE}/terraform output -raw instance_public_ip",
               returnStdout: true
@@ -39,33 +41,44 @@ pipeline {
               error("ERROR: Could not get ec2_public_ip from Terraform.")
             }
             
-            sh 'chmod 600 ${PEM_KEY} ${JEN_KEY}'
+            // Set proper permissions for keys
+            sh "chmod 600 ${PEM_KEY} ${JEN_KEY}"
 
+            // Create inventory
             writeFile file: 'inventory.yml', text: """
 all:
-  children:
-    target:
-      hosts:
-        rails-server-1:
-          ansible_host: ${ec2_ip}
-          ansible_user: ubuntu
-          ansible_ssh_private_key_file: ${PEM_KEY}
-          ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
-
-        rails-server-2:
-          ansible_host: ${ec2_ip}
-          ansible_user: ${JEN_USER}
-          ansible_ssh_private_key_file: ${JEN_KEY}
-          ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+  hosts:
+    rails-server:
+      ansible_host: ${ec2_ip}
+      ansible_user: ubuntu
+      ansible_ssh_private_key_file: ${PEM_KEY}
+      # Consider setting host key checking in a more secure way
+      ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
 """
 
+            // Verify inventory
             sh 'cat inventory.yml'
 
-            sh 'ansible-playbook -i inventory.yml ansible/deploy1.yml'
-            
+            // Run playbook with verbose output for debugging
+            sh 'ansible-playbook -i inventory.yml -vv ansible/deploy1.yml'
           }
         }
       }
+    }
+  }
+
+  post {
+    always {
+      // Cleanup or notifications could go here
+      echo 'Pipeline completed - cleanup if needed'
+    }
+    failure {
+      // Send failure notification
+      echo 'Pipeline failed!'
+    }
+    success {
+      // Send success notification
+      echo 'Pipeline succeeded!'
     }
   }
 }
