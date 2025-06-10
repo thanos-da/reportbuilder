@@ -60,11 +60,11 @@
         backup: yes
       notify: Restart sshd
 
-  handlers:
-    - name: restart sshd
-      service:
-        name: sshd
-        state: restarted
+  #handlers:
+    #- name: restart sshd
+      #service:
+       # name: sshd
+        #state: restarted
         
 - name: Install Ruby 3.0.0 with RVM and custom OpenSSL for existing user 'rpx'
   hosts: rails-server-2
