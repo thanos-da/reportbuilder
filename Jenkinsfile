@@ -48,10 +48,16 @@ pipeline {
             writeFile file: 'inventory.yml', text: """
 all:
   hosts:
-    rails-server:
+    rails-server-1:
       ansible_host: ${ec2_ip}
       ansible_user: ubuntu
       ansible_ssh_private_key_file: ${PEM_KEY}
+      # Consider setting host key checking in a more secure way
+      ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+    rails-server-2:
+      ansible_host: ${ec2_ip}
+      ansible_user: rpx
+      ansible_ssh_private_key_file: ${JEN_KEY}
       # Consider setting host key checking in a more secure way
       ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
 """
