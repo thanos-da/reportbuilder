@@ -1,111 +1,205 @@
 ---
-- name: Create AWS user with auto-generated Jenkins key
-  hosts: all  # Targets your AWS servers
-  become: true
+- name: Generate SSH key on Jenkins server and propagate to target server
+  hosts: localhost
+  gather_facts: false
+
   vars:
-    new_username: "deployer"
-    jenkins_key_path: "/var/lib/jenkins/.ssh/id_ansible_{{ new_username }}"
-    sudoers_file: "/etc/sudoers.d/90-{{ new_username }}"
+    ssh_key_path: /var/lib/jenkins/.ssh/id_rsa
+    public_key_path: /var/lib/jenkins/.ssh/id_rsa.pub
+    target_user: jenkins 
 
   tasks:
-    ### Part 1: Generate SSH key locally (Jenkins server is localhost) ###
-    - name: Ensure Jenkins .ssh directory exists
-      file:
-        path: "/var/lib/jenkins/.ssh"
-        state: directory
-        mode: 0700
-        owner: jenkins
-        group: jenkins
-      tags: keygen
 
-    - name: Check if SSH key exists locally
-      stat:
-        path: "{{ jenkins_key_path }}"
-      register: jenkins_key_stat
-      tags: keygen
-
-    - name: Generate SSH key pair locally
+    - name: Generate SSH key pair if not exists
       community.crypto.openssh_keypair:
-        path: "{{ jenkins_key_path }}"
+        path: "{{ ssh_key_path }}"
         type: rsa
-        size: 4096
-        state: present
-        owner: jenkins
-        group: jenkins
-        mode: '0600'
-      when: not jenkins_key_stat.stat.exists
-      tags: keygen
+        size: 2048
+        force: false
 
-    - name: Read public key locally
+    - name: Read the public key
       slurp:
-        src: "{{ jenkins_key_path }}.pub"
-      register: jenkins_pubkey
-      tags: keygen
+        src: "{{ public_key_path }}"
+      register: pub_key_content
 
-    - name: Decode public key
-      set_fact:
-        jenkins_public_key: "{{ jenkins_pubkey.content | b64decode }}"
-      tags: keygen
+- name: Create user and copy public key on remote hosts
+  hosts: rails-server-1
+  become: true
+  gather_facts: false
 
-    ### Part 2: Configure AWS server ###
-    - name: Create new user
-      user:
-        name: "{{ new_username }}"
+  vars:
+    target_user: rpx
+
+  tasks:
+    - name: Ensure user exists
+      ansible.builtin.user:
+        name: "{{ target_user }}"
         shell: /bin/bash
         groups: sudo
         append: yes
         create_home: yes
-        home: "/home/{{ new_username }}"
-        password_lock: yes
 
-    - name: Create .ssh directory for new user
-      file:
-        path: "/home/{{ new_username }}/.ssh"
-        state: directory
-        mode: 0700
-        owner: "{{ new_username }}"
-        group: "{{ new_username }}"
-
-    - name: Add Jenkins public key to authorized_keys
-      copy:
-        content: "{{ jenkins_public_key }}"
-        dest: "/home/{{ new_username }}/.ssh/authorized_keys"
-        owner: "{{ new_username }}"
-        group: "{{ new_username }}"
-        mode: 0600
-
-    - name: Configure sudo access without password
-      copy:
-        content: "{{ new_username }} ALL=(ALL) NOPASSWD:ALL\n"
-        dest: "{{ sudoers_file }}"
-        mode: 0440
-        validate: 'visudo -cf %s'
-
-    - name: Disable password authentication
-      lineinfile:
-        path: /etc/ssh/sshd_config
-        regexp: "^PasswordAuthentication"
-        line: "PasswordAuthentication no"
+    - name: Add public key to authorized_keys
+      ansible.posix.authorized_key:
+        user: "{{ target_user }}"
         state: present
-      notify: restart sshd
+        key: "{{ hostvars['localhost'].pub_key_content.content | b64decode }}"
 
-    - name: Configure SSH allowed users
-      lineinfile:
+    - name: Allow passwordless sudo for the user
+      ansible.builtin.copy:
+        dest: "/etc/sudoers.d/{{ target_user }}"
+        content: "{{ target_user }} ALL=(ALL) NOPASSWD:ALL\n"
+        mode: '0440'
+
+    - name: Disable password authentication for SSH globally
+      ansible.builtin.lineinfile:
         path: /etc/ssh/sshd_config
-        regexp: "^AllowUsers"
-        line: "AllowUsers {{ new_username }} ubuntu"
+        regexp: '^PasswordAuthentication'
+        line: 'PasswordAuthentication no'
         state: present
-      notify: restart sshd
-
-    - name: Ensure SSH config has correct permissions
-      file:
-        path: /etc/ssh/sshd_config
-        mode: 0600
-        owner: root
-        group: root
+        backup: yes
+      notify: Restart sshd
 
   handlers:
-    - name: restart sshd
-      service:
+    - name: Restart sshd
+      ansible.builtin.service:
         name: sshd
         state: restarted
+        
+- name: Install Ruby 3.0.0 with RVM and custom OpenSSL for existing user 'rpx'
+  hosts: rails-server-2
+  become: yes
+
+  vars:
+    rpx_user: "rpx"
+    rpx_grp: "rpx"
+    openssl_version: "1.1.1w"
+    openssl_prefix: "/opt/openssl-1.1"
+    ruby_version: "3.0.0"
+    deploy_branch: "RB_2025_05_02_RC"
+    app_path: "/home/rpx/app" 
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install required dependencies
+      apt:
+        name:
+          - curl
+          - gpg
+          - build-essential
+          - libreadline-dev
+          - zlib1g-dev
+          - libsqlite3-dev
+          - libffi-dev
+          - libgdbm-dev
+          - libncurses5-dev
+          - libyaml-dev
+        state: present
+
+    - name: Create source directory
+      file:
+        path: /usr/local/src
+        state: directory
+
+    - name: Download OpenSSL
+      get_url:
+        url: "https://www.openssl.org/source/openssl-{{ openssl_version }}.tar.gz"
+        dest: "/usr/local/src/openssl-{{ openssl_version }}.tar.gz"
+
+    - name: Extract OpenSSL
+      unarchive:
+        src: "/usr/local/src/openssl-{{ openssl_version }}.tar.gz"
+        dest: /usr/local/src
+        remote_src: yes
+
+    - name: Build and install OpenSSL
+      shell: |
+        cd /usr/local/src/openssl-{{ openssl_version }}
+        ./config --prefix={{ openssl_prefix }} --openssldir={{ openssl_prefix }} shared zlib
+        make -j"$(nproc)"
+        make install
+      args:
+        creates: "{{ openssl_prefix }}/bin/openssl"
+
+    - name: Ensure GPG directory for rpx
+      file:
+        path: "/home/{{ rpx_user }}/.gnupg"
+        state: directory
+        owner: "{{ rpx_user }}"
+        group: "{{ rpx_grp }}"
+        mode: '0700'
+
+    - name: Import GPG keys for RVM as rpx
+      become_user: "{{ rpx_user }}"
+      vars:
+        ansible_become_flags: "-n -H -S"
+      environment:
+        GNUPGHOME: "/home/rpx/.gnupg"
+      shell: |
+        gpg --keyserver hkp://keyserver.ubuntu.com --recv-keys \
+        409B6B1796C275462A1703113804BB82D39DC0E3 \
+        7D2BAF1CF37B13E2069D6956105BD0E739499BDB \
+        || true
+        curl -sSL https://rvm.io/mpapis.asc | gpg --import -
+        curl -sSL https://rvm.io/pkuczynski.asc | gpg --import -
+      args:
+        executable: /bin/bash
+
+    - name: Install RVM as rpx
+      become_user: "{{ rpx_user }}"
+      shell: \curl -sSL https://get.rvm.io | bash -s stable
+      args:
+        executable: /bin/bash
+        creates: "/home/{{ rpx_user }}/.rvm"
+
+    - name: Install Ruby using RVM with custom OpenSSL as rpx
+      become_user: "{{ rpx_user }}"
+      shell: |
+        source /home/{{ rpx_user }}/.rvm/scripts/rvm
+        rvm install {{ ruby_version }} --with-openssl-dir={{ openssl_prefix }}
+        rvm use {{ ruby_version }} --default
+        ruby -v
+      args:
+        executable: /bin/bash
+
+    - name: Set Ruby as default
+      become_user: "{{ rpx_user }}"
+      shell: |
+        source /home/{{ rpx_user }}/.rvm/scripts/rvm
+        rvm use {{ ruby_version }} --default
+      args:
+        executable: /bin/bash
+
+    - name: Verify Ruby installation
+      become_user: "{{ rpx_user }}"
+      shell: |
+        source /home/{{ rpx_user }}/.rvm/scripts/rvm
+        ruby -v
+      args:
+        executable: /bin/bash
+      register: ruby_version_output
+    
+    - name: Show Ruby version
+      ansible.builtin.debug:
+        msg: "Ruby version is: {{ ruby_version_output.stdout }}"
+    
+    - name: Install bundler gem for each user
+      become_user: "{{ rpx_user }}"
+      shell: |
+        source ~/.rvm/scripts/rvm
+        gem install bundler
+      args:
+        executable: /bin/bash
+
+    - name: Run Capistrano deployment with branch and username
+      shell: |
+        sudo -u {{ rpx_user }} bash -c '
+          source ~/.rvm/scripts/rvm
+          cd {{ app_path }}
+          cap qa deploy BRANCH={{ deploy_branch }} USERNAME={{ rpx_user }}
+        '
+      args:
+        executable: /bin/bash
