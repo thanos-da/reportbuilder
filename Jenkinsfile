@@ -42,8 +42,10 @@ pipeline {
             }
             
             // Set proper permissions for keys
-            sh "chmod 600 ${PEM_KEY} ${JEN_KEY}"
-
+        sh """
+          chmod 600 ${JEN_KEY} ${PEM_KEY}
+          ssh-keygen -y -f ${JEN_KEY} || echo 'Key verification failed'
+        """
             // Create inventory
             writeFile file: 'inventory.yml', text: """
 all:
