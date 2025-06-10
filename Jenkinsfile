@@ -61,10 +61,8 @@ all:
 
             sh 'cat inventory.yml'
 
-            sh """
-              chmod 600 ${PEM_KEY} ${JEN_KEY}
-              ansible-playbook -i inventory.yml ansible/deploy1.yml
-            """
+            sh 'ansible-playbook -i inventory.yml ansible/deploy1.yml'
+            
           }
         }
       }
