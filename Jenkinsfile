@@ -36,9 +36,8 @@ pipeline {
 stage('Deploy with Ansible') {
  steps {
   // Load both PEM keys at once
-  withCredentials([
-    file(credentialsId: 'aws_ec2_key', variable: 'PEM_KEY'),
-    file(credentialsId: 'jenkins_key', variable: 'JEN_KEY')
+   file(credentialsId: 'aws_ec2_key', variable: 'PEM_KEY'),
+  sshUserPrivateKey(credentialsId: 'jenkins_key', keyFileVariable: 'JEN_KEY', usernameVariable: 'JEN_USER')
   ]) {
     script {
       // Run Terraform to get the EC2 IP address
@@ -65,7 +64,7 @@ all:
 
         rails-server-2:
           ansible_host: ${ec2_ip}
-          ansible_user: rpx
+          ansible_user: ${JEN_USER}
           ansible_ssh_private_key_file: ${JEN_KEY}
           ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
 """
