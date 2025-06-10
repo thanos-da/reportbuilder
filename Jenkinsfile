@@ -36,8 +36,8 @@ pipeline {
 stage('Deploy with Ansible') {
  steps {
   // Load both PEM keys at once
-   file(credentialsId: 'aws_ec2_key', variable: 'PEM_KEY'),
-  sshUserPrivateKey(credentialsId: 'jenkins_key', keyFileVariable: 'JEN_KEY', usernameVariable: 'JEN_USER')
+    file(credentialsId: 'aws_ec2_key', variable: 'PEM_KEY'),
+    sshUserPrivateKey(credentialsId: 'jenkins_key', keyFileVariable: 'JEN_KEY', usernameVariable: 'JEN_USER')
   ]) {
     script {
       // Run Terraform to get the EC2 IP address
