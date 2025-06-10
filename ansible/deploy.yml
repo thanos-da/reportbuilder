@@ -58,7 +58,7 @@
         line: 'PasswordAuthentication no'
         state: present
         backup: yes
-      notify: Restart sshd
+      #notify: Restart sshd
 
   #handlers:
     #- name: restart sshd
