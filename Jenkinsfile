@@ -6,7 +6,6 @@ pipeline {
   }
 
   environment {
-    // Define workspace-relative paths once
     TF_DIR = 'terraform'
     ANSIBLE_DIR = 'ansible'
   }
