@@ -15,7 +15,7 @@
         path: "{{ ssh_key_path }}"
         type: rsa
         size: 2048
-        force: false
+        force: flase
 
     - name: Read the public key
       slurp:
