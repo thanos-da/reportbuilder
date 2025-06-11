@@ -7,3 +7,4 @@ variable "key_name" {}
 variable "availability_zone" {}
 variable "vol_size" {}
 variable "vol_type" {}
+variable "iam_instance_profile_name" {}
