@@ -122,15 +122,9 @@ all:
   post {
     failure {
       echo 'Pipeline failed!'
-      // Add actual notification (Slack, email, etc.)
     }
     success {
       echo 'Pipeline succeeded!'
-      // Add actual notification (Slack, email, etc.)
-    }
-    always {
-      echo 'Pipeline completed. Cleaning up...'
-      // Add any cleanup steps
     }
   }
 }
