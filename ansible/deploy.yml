@@ -58,13 +58,13 @@
         line: 'PasswordAuthentication no'
         state: present
         backup: yes
-      #notify: Restart sshd
+      notify: Restart ssh
 
-  #handlers:
-    #- name: restart sshd
-      #service:
-       # name: sshd
-        #state: restarted
+  handlers:
+    - name: restart sshd
+      service:
+        name: ssh
+        state: restarted
         
 - name: Install Ruby 3.0.0 with RVM and custom OpenSSL for existing user 'rpx'
   hosts: rails-server-2
