@@ -1,5 +1,4 @@
 aws_region                  = "us-east-1"
-availability_zone           = "us-east-1a"
 instance_type               = "t2.large"
 subnet_id                   = "subnet-0d2642da77bbfe744"
 security_group_id           = "sg-0d9f83e6b570f7720"
