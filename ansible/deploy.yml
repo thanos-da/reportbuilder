@@ -76,7 +76,7 @@
     openssl_version: "1.1.1w"
     openssl_prefix: "/opt/openssl-1.1"
     ruby_version: "3.0.0"
-    deploy_branch: "RB_2025_05_02_RC"
+    deploy_branch: "master"
     app_path: "/home/rpx/app" 
 
   tasks:
