@@ -5,7 +5,7 @@ provider "aws" {
 # Get the Latest Ubuntu 24.04 AMI
 data "aws_ami" "ubuntu_24_04" {
   most_recent = true
-  owners      = ["099720109477"] # Canonical
+  owners      = ["099720109477"]
 
   filter {
     name   = "name"
