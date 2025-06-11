@@ -19,12 +19,12 @@ data "aws_ami" "ubuntu_24_04" {
 }
 
 # EC2 Instance Configuration
-resource "aws_instance" "DMA_app" {
+resource "aws_instance" "dma_app" {
   ami                    = data.aws_ami.ubuntu_24_04.id
   instance_type          = var.instance_type
-  subnet_id              = var.existing_subnet_id          # Using variable directly
-  vpc_security_group_ids = [var.existing_security_group_id] # Using variable directly
-  iam_instance_profile   = var.existing_iam_instance_profile_name # Using variable directly
+  subnet_id              = var.subnet_id         
+  vpc_security_group_ids = [var.security_group_id]
+  iam_instance_profile   = var.iam_instance_profile_name
   key_name               = var.key_name
 
   root_block_device {
@@ -42,10 +42,10 @@ resource "aws_instance" "DMA_app" {
 
 output "instance_public_ip" {
   description = "Public IP address of the DMA application instance"
-  value       = aws_instance.DMA_app.public_ip
+  value       = aws_instance.dma_app.public_ip
 }
 
 output "instance_id" {
   description = "ID of the created EC2 instance"
-  value       = aws_instance.DMA_app.id
+  value       = aws_instance.dma_app.id
 }
