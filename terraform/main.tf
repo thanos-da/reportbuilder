@@ -5,7 +5,7 @@ provider "aws" {
 # Get the Latest Ubuntu 24.04 AMI
 data "aws_ami" "ubuntu_24_04" {
   most_recent = true
-  owners      = ["099720109477"]
+  owners      = ["099720109477"] # Canonical
 
   filter {
     name   = "name"
@@ -18,23 +18,13 @@ data "aws_ami" "ubuntu_24_04" {
   }
 }
 
-# Reference Existing VPC and Subnet
-
-data "aws_vpc" "existing" {
-  id = var.existing_vpc_id
-}
-
-data "aws_subnet" "existing" {
-  id = var.existing_subnet_id
-}
-
 # EC2 Instance Configuration
 resource "aws_instance" "DMA_app" {
   ami                    = data.aws_ami.ubuntu_24_04.id
   instance_type          = var.instance_type
-  availability_zone      = data.aws_subnet.existing.availability_zone
-  subnet_id              = var.existing_subnet_id
-  vpc_security_group_ids = [var.existing_security_group_id]
+  subnet_id              = var.existing_subnet_id          # Using variable directly
+  vpc_security_group_ids = [var.existing_security_group_id] # Using variable directly
+  iam_instance_profile   = var.existing_iam_instance_profile_name # Using variable directly
   key_name               = var.key_name
 
   root_block_device {
@@ -44,11 +34,18 @@ resource "aws_instance" "DMA_app" {
   }
 
   tags = {
-    Name = "Report Builder"
+    Name        = "DMA_Application"
+    Environment = "Production"
+    ManagedBy   = "Terraform"
   }
 }
 
 output "instance_public_ip" {
   description = "Public IP address of the DMA application instance"
   value       = aws_instance.DMA_app.public_ip
+}
+
+output "instance_id" {
+  description = "ID of the created EC2 instance"
+  value       = aws_instance.DMA_app.id
 }
